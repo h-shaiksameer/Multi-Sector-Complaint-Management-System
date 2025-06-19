@@ -1,11 +1,9 @@
 "use client"
 
-import type React from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { X, Send, Bot, User, AlertCircle } from "lucide-react"
+import { X, Send, Bot, User } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 
 export default function GeminiChat() {
@@ -20,7 +18,14 @@ export default function GeminiChat() {
   ])
   const [inputValue, setInputValue] = useState("")
   const [isTyping, setIsTyping] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [user, setUser] = useState<any>(null)
+
+  useEffect(() => {
+    const userData = localStorage.getItem("user")
+    if (userData) {
+      setUser(JSON.parse(userData))
+    }
+  }, [])
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return
@@ -35,25 +40,19 @@ export default function GeminiChat() {
     setMessages((prev) => [...prev, userMessage])
     setInputValue("")
     setIsTyping(true)
-    setError(null)
 
     try {
-      console.log("Sending message to Gemini API:", inputValue)
-
+      // Call Gemini API with user ID
       const response = await fetch("/api/gemini-chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: inputValue }),
+        body: JSON.stringify({
+          message: inputValue,
+          userId: user?.id || null,
+        }),
       })
 
-      console.log("Response status:", response.status)
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
       const data = await response.json()
-      console.log("Response data:", data)
 
       const botResponse = {
         id: Date.now() + 1,
@@ -64,38 +63,17 @@ export default function GeminiChat() {
 
       setMessages((prev) => [...prev, botResponse])
     } catch (error) {
-      console.error("Chat error:", error)
-
       const errorResponse = {
         id: Date.now() + 1,
-        text: "I'm experiencing some technical difficulties. Here are some quick links that might help:\n\n• File a complaint: Use the buttons on the homepage\n• Track complaints: Visit your Dashboard\n• Contact support: Use our Contact page",
+        text: "I'm experiencing some technical difficulties. Please try again later or contact our support team.",
         isBot: true,
         timestamp: new Date(),
-        isError: true,
       }
-
       setMessages((prev) => [...prev, errorResponse])
-      setError("Connection issue - please try again later")
     } finally {
       setIsTyping(false)
     }
   }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault()
-      handleSendMessage()
-    }
-  }
-
-  const quickActions = [
-    { text: "How do I file a complaint?", action: () => setInputValue("How do I file a complaint?") },
-    { text: "Track my complaint status", action: () => setInputValue("How can I track my complaint status?") },
-    {
-      text: "What types of complaints can I file?",
-      action: () => setInputValue("What types of complaints can I file?"),
-    },
-  ]
 
   return (
     <>
@@ -127,7 +105,7 @@ export default function GeminiChat() {
                   </div>
                   <div>
                     <h3 className="font-semibold">Gemini Assistant</h3>
-                    <p className="text-sm opacity-90">{error ? "Connection issues" : "AI-powered support"}</p>
+                    <p className="text-sm opacity-90">AI-powered support</p>
                   </div>
                 </div>
                 <Button
@@ -139,42 +117,14 @@ export default function GeminiChat() {
                   <X className="h-4 w-4" />
                 </Button>
               </div>
-              {error && (
-                <div className="mt-2 flex items-center space-x-2 text-yellow-200 text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>{error}</span>
-                </div>
-              )}
             </div>
-
-            {/* Quick Actions */}
-            {messages.length === 1 && (
-              <div className="p-4 bg-gray-50 border-b">
-                <p className="text-sm text-gray-600 mb-3">Quick actions:</p>
-                <div className="space-y-2">
-                  {quickActions.map((action, index) => (
-                    <Button
-                      key={index}
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-left justify-start text-xs"
-                      onClick={action.action}
-                    >
-                      {action.text}
-                    </Button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Messages */}
             <div className="flex-1 p-4 overflow-y-auto space-y-4">
               {messages.map((message) => (
                 <div key={message.id} className={`flex ${message.isBot ? "justify-start" : "justify-end"}`}>
                   <div
-                    className={`flex items-start space-x-2 max-w-xs ${
-                      message.isBot ? "" : "flex-row-reverse space-x-reverse"
-                    }`}
+                    className={`flex items-start space-x-2 max-w-xs ${message.isBot ? "" : "flex-row-reverse space-x-reverse"}`}
                   >
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -188,11 +138,11 @@ export default function GeminiChat() {
                     <div
                       className={`p-3 rounded-2xl ${
                         message.isBot
-                          ? `${(message as any).isError ? "bg-red-50 border border-red-200" : "bg-gray-100"} text-gray-800`
+                          ? "bg-gray-100 text-gray-800"
                           : "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                       }`}
                     >
-                      <p className="text-sm leading-relaxed whitespace-pre-line">{message.text}</p>
+                      <p className="text-sm leading-relaxed">{message.text}</p>
                       <p className={`text-xs mt-1 ${message.isBot ? "text-gray-500" : "text-blue-100"}`}>
                         {message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </p>
@@ -231,8 +181,8 @@ export default function GeminiChat() {
                 <Input
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  placeholder="Ask me anything about complaints..."
-                  onKeyPress={handleKeyPress}
+                  placeholder="Ask me anything about your complaints..."
+                  onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
                   className="flex-1"
                   disabled={isTyping}
                 />
